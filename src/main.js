@@ -1,7 +1,7 @@
 const SName = Symbol("storage-name");
 const IDB = Symbol("idb");
 
-export class IndexStorage {
+export class IDBStorage {
   constructor(id = "public") {
     this[SName] = id;
 
@@ -73,7 +73,7 @@ export class IndexStorage {
   }
 }
 
-const exitedKeys = new Set(Object.getOwnPropertyNames(IndexStorage.prototype));
+const exitedKeys = new Set(Object.getOwnPropertyNames(IDBStorage.prototype));
 
 const handle = {
   get(target, key, receiver) {
@@ -108,4 +108,4 @@ const commonTask = async (_this, afterStore, succeed, mode = "readwrite") => {
   });
 };
 
-export const storage = new IndexStorage();
+export const storage = new IDBStorage();

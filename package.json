@@ -1,5 +1,5 @@
 {
-  "name": "index-storage",
+  "name": "idb-storage",
   "version": "1.0.1",
   "type": "module",
   "description": "Use a localStorage-like API encapsulated by indexdb",
