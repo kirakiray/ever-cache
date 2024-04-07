@@ -4,12 +4,17 @@
   "type": "module",
   "description": "Use a localStorage-like API encapsulated by indexdb",
   "main": "src/index.js",
-  "directories": {
-    "test": "test"
-  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "static": "node ./scripts/static-server.js",
+    "test": "npx playwright test",
+    "ci-test": "node scripts/ci-test.js"
   },
-  "author": "",
-  "license": "Apache-2.0"
+  "author": "YAO",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@playwright/test": "^1.43.0",
+    "@types/node": "^20.12.5",
+    "koa-static": "^5.0.0",
+    "shelljs": "^0.8.5"
+  }
 }
