@@ -10,10 +10,12 @@
     <button id="removeok"></button>
     <button id="keyok"></button>
     <button id="lenok"></button>
+    <button id="proxyok"></button>
+    <button id="proxyremoveok"></button>
     <script type="module">
-      import { IndexStorage } from "../src/index.js";
+      import { IndexStorage, storage } from "../src/main.js";
 
-      const storage = new IndexStorage();
+      console.log(storage);
 
       (async () => {
         await storage.setItem("testKey1", { data: "test key 1" });
@@ -42,6 +44,25 @@
         }
       })();
 
+      (async () => {
+        storage.testKey3 = { data: "test key 3" };
+
+        const val = await storage.testKey3;
+
+        if (val.data === "test key 3") {
+          document.querySelector("#proxyok").innerHTML = "proxy get and set ok";
+        }
+
+        delete storage["testKey3"];
+
+        const val2 = await storage["testKey3"];
+
+        if (val2 === null) {
+          document.querySelector("#proxyremoveok").innerHTML =
+            "proxy delete ok";
+        }
+      })();
+
       setTimeout(async () => {
         const keyOneName = await storage.key(0);
 
@@ -57,8 +78,6 @@
 
         await storage.clear();
       }, 200);
-
-      console.log(storage);
     </script>
   </body>
 </html>
