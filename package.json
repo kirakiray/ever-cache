@@ -17,5 +17,11 @@
     "koa": "^2.15.2",
     "koa-static": "^5.0.0",
     "shelljs": "^0.8.5"
-  }
+  },
+  "keywords": [
+    "ever-cache",
+    "localStorage",
+    "indexdb",
+    "index-storage"
+  ]
 }
