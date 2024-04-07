@@ -1,0 +1,15 @@
+{
+  "name": "index-storage",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Use a localStorage-like API encapsulated by indexdb",
+  "main": "src/index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "Apache-2.0"
+}

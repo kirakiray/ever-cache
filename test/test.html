@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Index Stroage</title>
+  </head>
+  <body>
+    <div id="sgok"></div>
+    <div id="removeok"></div>
+    <div id="keyok"></div>
+    <div id="lenok"></div>
+    <script type="module">
+      import { IndexStorage } from "../src/index.js";
+
+      const storage = new IndexStorage();
+
+      (async () => {
+        await storage.setItem("testKey1", { data: "test key 1" });
+
+        const val = await storage.getItem("testKey1");
+
+        if (val.data === "test key 1") {
+          document.querySelector("#sgok").innerHTML = "set and get ok";
+        }
+      })();
+
+      (async () => {
+        await storage.setItem("testKey2", { data: "test key 2" });
+
+        const val = await storage.getItem("testKey2");
+        if (val.data !== "test key 2") {
+          throw `set key2 error`;
+        }
+
+        await storage.removeItem("testKey2");
+
+        const val2 = await storage.getItem("testKey2");
+
+        if (val2 === null) {
+          document.querySelector("#removeok").innerHTML = "remove ok";
+        }
+      })();
+
+      setTimeout(async () => {
+        const keyOneName = await storage.key(0);
+
+        if (keyOneName === "testKey1") {
+          document.querySelector("#keyok").innerHTML = "key ok";
+        }
+
+        const len = await storage.length;
+
+        if (len === 1) {
+          document.querySelector("#lenok").innerHTML = "length ok";
+        }
+
+        await storage.clear();
+      }, 200);
+
+      console.log(storage);
+    </script>
+  </body>
+</html>
