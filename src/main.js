@@ -1,10 +1,11 @@
 const SName = Symbol("storage-name");
+const IDB = Symbol("idb");
 
 export class IndexStorage {
   constructor(id = "public") {
     this[SName] = id;
 
-    this._db = new Promise((resolve) => {
+    this[IDB] = new Promise((resolve) => {
       let req = indexedDB.open("index-storage");
 
       req.onsuccess = (e) => {
@@ -71,7 +72,7 @@ export class IndexStorage {
 }
 
 const commonTask = async (_this, afterStore, succeed, mode = "readwrite") => {
-  const db = await _this._db;
+  const db = await _this[IDB];
 
   return new Promise((resolve, reject) => {
     const req = afterStore(
