@@ -1,12 +1,12 @@
 const SName = Symbol("storage-name");
 const IDB = Symbol("idb");
 
-export class IndexStorage {
+export class EverCache {
   constructor(id = "public") {
     this[SName] = id;
 
     this[IDB] = new Promise((resolve) => {
-      let req = indexedDB.open("index-storage");
+      let req = indexedDB.open("ever-cache");
 
       req.onsuccess = (e) => {
         resolve(e.target.result);
@@ -73,7 +73,7 @@ export class IndexStorage {
   }
 }
 
-const exitedKeys = new Set(Object.getOwnPropertyNames(IndexStorage.prototype));
+const exitedKeys = new Set(Object.getOwnPropertyNames(EverCache.prototype));
 
 const handle = {
   get(target, key, receiver) {
@@ -108,4 +108,4 @@ const commonTask = async (_this, afterStore, succeed, mode = "readwrite") => {
   });
 };
 
-export const storage = new IndexStorage();
+export const storage = new EverCache();

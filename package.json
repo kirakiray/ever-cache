@@ -1,6 +1,6 @@
 {
-  "name": "index-storage",
-  "version": "1.0.1",
+  "name": "ever-cache",
+  "version": "1.0.2",
   "type": "module",
   "description": "Use a localStorage-like API encapsulated by indexdb",
   "main": "src/main.js",
@@ -17,5 +17,11 @@
     "koa": "^2.15.2",
     "koa-static": "^5.0.0",
     "shelljs": "^0.8.5"
-  }
+  },
+  "keywords": [
+    "ever-cache",
+    "localStorage",
+    "indexdb",
+    "index-storage"
+  ]
 }
