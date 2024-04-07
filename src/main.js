@@ -16,6 +16,8 @@ export class IndexStorage {
         e.target.result.createObjectStore(id, { keyPath: "key" });
       };
     });
+
+    return new Proxy(this, handle);
   }
 
   async setItem(key, value) {
@@ -71,6 +73,24 @@ export class IndexStorage {
   }
 }
 
+const exitedKeys = new Set(Object.getOwnPropertyNames(IndexStorage.prototype));
+
+const handle = {
+  get(target, key, receiver) {
+    if (exitedKeys.has(key) || typeof key === "symbol") {
+      return Reflect.get(target, key, receiver);
+    }
+
+    return target.getItem(key);
+  },
+  set(target, key, value) {
+    return target.setItem(key, value);
+  },
+  deleteProperty(target, key) {
+    return target.removeItem(key);
+  },
+};
+
 const commonTask = async (_this, afterStore, succeed, mode = "readwrite") => {
   const db = await _this[IDB];
 
@@ -87,3 +107,5 @@ const commonTask = async (_this, afterStore, succeed, mode = "readwrite") => {
     };
   });
 };
+
+export const storage = new IndexStorage();

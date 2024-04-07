@@ -1,9 +1,9 @@
 {
   "name": "index-storage",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Use a localStorage-like API encapsulated by indexdb",
-  "main": "src/index.js",
+  "main": "src/main.js",
   "scripts": {
     "static": "node ./scripts/static-server.js",
     "test": "npx playwright test",
@@ -14,6 +14,7 @@
   "devDependencies": {
     "@playwright/test": "^1.43.0",
     "@types/node": "^20.12.5",
+    "koa": "^2.15.2",
     "koa-static": "^5.0.0",
     "shelljs": "^0.8.5"
   }
