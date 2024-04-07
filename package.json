@@ -1,5 +1,5 @@
 {
-  "name": "idb-storage",
+  "name": "ever-cache",
   "version": "1.0.2",
   "type": "module",
   "description": "Use a localStorage-like API encapsulated by indexdb",
