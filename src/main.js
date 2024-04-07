@@ -6,7 +6,7 @@ export class IDBStorage {
     this[SName] = id;
 
     this[IDB] = new Promise((resolve) => {
-      let req = indexedDB.open("index-storage");
+      let req = indexedDB.open("idb-storage");
 
       req.onsuccess = (e) => {
         resolve(e.target.result);
