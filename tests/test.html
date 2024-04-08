@@ -12,8 +12,12 @@
     <button id="lenok"></button>
     <button id="proxyok"></button>
     <button id="proxyremoveok"></button>
+    <button id="iteratorok"></button>
+    <button id="clearok"></button>
     <script type="module">
       import { EverCache, storage } from "../src/main.js";
+
+      window.storage = storage;
 
       console.log(storage);
 
@@ -64,19 +68,35 @@
       })();
 
       setTimeout(async () => {
-        const keyOneName = await storage.key(0);
+        await storage.setItem("testKeyFinally", 1);
 
-        if (keyOneName === "testKey1") {
+        const firstKeyName = await storage.key(0);
+        const secondKeyName = await storage.key(1);
+
+        if (firstKeyName === "testKey1" && secondKeyName === "testKeyFinally") {
           document.querySelector("#keyok").innerHTML = "key ok";
         }
 
         const len = await storage.length;
 
-        if (len === 1) {
+        if (len === 2) {
           document.querySelector("#lenok").innerHTML = "length ok";
         }
 
+        let count = 0;
+        for await (let item of storage.values()) {
+          count++;
+        }
+
+        if (count === 2) {
+          document.querySelector("#iteratorok").innerHTML = "iterator ok";
+        }
+
         await storage.clear();
+
+        if ((await storage.length) === 0) {
+          document.querySelector("#clearok").innerHTML = "clear ok";
+        }
       }, 200);
     </script>
   </body>

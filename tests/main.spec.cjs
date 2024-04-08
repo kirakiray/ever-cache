@@ -10,4 +10,6 @@ test("base function ok", async ({ page }) => {
   await page.getByRole("button", { name: "length ok" }).click();
   await page.getByRole("button", { name: "proxy get and set ok" }).click();
   await page.getByRole("button", { name: "proxy delete ok" }).click();
+  await page.getByRole("button", { name: "iterator ok" }).click();
+  await page.getByRole("button", { name: "clear ok" }).click();
 });

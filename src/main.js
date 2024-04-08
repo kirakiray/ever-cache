@@ -21,55 +21,84 @@ export class EverCache {
   }
 
   async setItem(key, value) {
-    return commonTask(
-      this,
-      (store) => store.put({ key, value }),
+    return commonTask(this, (store) => store.put({ key, value })).then(
       () => true
     );
   }
 
   async getItem(key) {
-    return commonTask(
-      this,
-      (store) => store.get(key),
-      (e) => {
-        const { result } = e.target;
-        return result ? result.value : null;
-      },
-      "readonly"
-    );
+    return commonTask(this, (store) => store.get(key), "readonly").then((e) => {
+      const { result } = e.target;
+      return result ? result.value : null;
+    });
   }
 
   async removeItem(key) {
-    return commonTask(
-      this,
-      (store) => store.delete(key),
-      () => true
-    );
+    return commonTask(this, (store) => store.delete(key)).then(() => true);
   }
 
   async clear() {
-    return commonTask(
-      this,
-      (store) => store.clear(),
-      () => true
-    );
+    return commonTask(this, (store) => store.clear()).then(() => true);
   }
 
   async key(index) {
-    return commonTask(
-      this,
-      (store) => store.getAllKeys(),
+    return commonTask(this, (store) => store.getAllKeys()).then(
       (e) => e.target.result[index]
     );
   }
 
   get length() {
-    return commonTask(
-      this,
-      (store) => store.count(),
+    return commonTask(this, (store) => store.count()).then(
       (e) => e.target.result
     );
+  }
+
+  entries() {
+    return {
+      [Symbol.asyncIterator]: () => {
+        let resolve;
+        let cursorPms;
+        const resetPms = () => {
+          cursorPms = new Promise((res) => (resolve = res));
+        };
+        resetPms();
+
+        commonTask(
+          this,
+          (store) => store.openCursor(),
+          "readonly",
+          (e) => resolve(e.target.result)
+        );
+
+        return {
+          async next() {
+            const cursor = await cursorPms;
+            if (!cursor) {
+              return {
+                done: true,
+              };
+            }
+            resetPms();
+            const { key, value } = cursor.value;
+            cursor.continue();
+
+            return { value: [key, value], done: false };
+          },
+        };
+      },
+    };
+  }
+
+  async *keys() {
+    for await (let [key, value] of this.entries()) {
+      yield key;
+    }
+  }
+
+  async *values() {
+    for await (let [key, value] of this.entries()) {
+      yield value;
+    }
   }
 }
 
@@ -91,7 +120,7 @@ const handle = {
   },
 };
 
-const commonTask = async (_this, afterStore, succeed, mode = "readwrite") => {
+const commonTask = async (_this, afterStore, mode = "readwrite", succeed) => {
   const db = await _this[IDB];
 
   return new Promise((resolve, reject) => {
@@ -100,7 +129,16 @@ const commonTask = async (_this, afterStore, succeed, mode = "readwrite") => {
     );
 
     req.onsuccess = (e) => {
-      resolve(succeed(e));
+      if (succeed) {
+        const result = succeed(e);
+        if (result) {
+          resolve(result);
+        }
+
+        return;
+      }
+
+      resolve(e);
     };
     req.onerror = (e) => {
       reject(e);
