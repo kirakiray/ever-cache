@@ -99,30 +99,5 @@
         }
       }, 200);
     </script>
-    <!-- <script>
-      const haha = () => {
-        return {
-          [Symbol.asyncIterator]() {
-            return {
-              current: 1,
-              async next() {
-                if (this.current <= 5) {
-                  return { done: false, value: this.current++ };
-                } else {
-                  return { done: true };
-                }
-              },
-            };
-          },
-        };
-      };
-
-      (async () => {
-        // 现在它可以运行了！
-        for await (let num of haha()) {
-          console.log(num); // 1, 然后是 2, 3, 4, 5
-        }
-      })();
-    </script> -->
   </body>
 </html>
