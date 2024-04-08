@@ -4,7 +4,7 @@
 
 EverCache 是一个高效且易于使用的缓存库，它基于 IndexedDB 构建，并提供了类似 localStorage 的接口。与 localStorage 相比，EverCache 支持异步操作、更大的存储空间以及对复杂数据类型的兼容。
 
-EverCache 的独特之处在于它允许您直接通过键名来存取数据，而无需调用特定的 setItem 或 getItem 方法。
+和其他类似的第三方库相比，EverCache 允许您直接通过键名来存取数据，而无需调用特定的 setItem 或 getItem 方法。
 
 ```javascript
 import { storage } from "ever-cache";
