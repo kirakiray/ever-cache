@@ -53,19 +53,53 @@ export class EverCache {
     );
   }
 
-  // async keys() {}
+  entries() {
+    return {
+      [Symbol.asyncIterator]: () => {
+        let resolve;
+        let cursorPms;
+        const resetPms = () => {
+          cursorPms = new Promise((res) => (resolve = res));
+        };
+        resetPms();
 
-  // async values() {}
+        commonTask(
+          this,
+          (store) => store.openCursor(),
+          "readonly",
+          (e) => resolve(e.target.result)
+        );
 
-  // async entries() {
-  //   commonTask(
-  //     this,
-  //     (store) => store.count(),
-  //     (e) => e.target.result
-  //   );
+        return {
+          async next() {
+            const cursor = await cursorPms;
+            if (!cursor) {
+              return {
+                done: true,
+              };
+            }
+            resetPms();
+            const { key, value } = cursor.value;
+            cursor.continue();
 
-  //   debugger;
-  // }
+            return { value: [key, value], done: false };
+          },
+        };
+      },
+    };
+  }
+
+  async *keys() {
+    for await (let [key, value] of this.entries()) {
+      yield key;
+    }
+  }
+
+  async *values() {
+    for await (let [key, value] of this.entries()) {
+      yield value;
+    }
+  }
 }
 
 const exitedKeys = new Set(Object.getOwnPropertyNames(EverCache.prototype));
@@ -86,7 +120,7 @@ const handle = {
   },
 };
 
-const commonTask = async (_this, afterStore, mode = "readwrite") => {
+const commonTask = async (_this, afterStore, mode = "readwrite", succeed) => {
   const db = await _this[IDB];
 
   return new Promise((resolve, reject) => {
@@ -95,7 +129,15 @@ const commonTask = async (_this, afterStore, mode = "readwrite") => {
     );
 
     req.onsuccess = (e) => {
-      // resolve(succeed(e));
+      if (succeed) {
+        const result = succeed(e);
+        if (result) {
+          resolve(result);
+        }
+
+        return;
+      }
+
       resolve(e);
     };
     req.onerror = (e) => {
