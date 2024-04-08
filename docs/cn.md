@@ -16,7 +16,7 @@ const data = await storage.myKey;
 // const data = await storage.getItem('myKey');
 ```
 
-不仅使用方便，而且代码还十分精简，minify后的文件只有1kb左右。
+不仅使用方便，而且代码还十分精简，minify后的文件不到2kb。
 
 ## 安装
 
@@ -128,6 +128,24 @@ firstKeys();
 ```javascript
 const count = await storage.length;
 console.log('Number of items:', count);
+```
+
+### 迭代数据
+
+通过 `entries()`、`keys()` 或 `values()` 方法遍历 storage 上的数据；
+
+```javascript
+(async()=>{
+  for await (let [key, value] of storage.entries()) {
+    console.log(key, value);
+  }
+  // for await (let key of storage.keys()) {
+  //   console.log(key);
+  // }
+  // for await (let item of storage.values()) {
+  //   console.log(item);
+  // }
+})();
 ```
 
 ## 高级用法
