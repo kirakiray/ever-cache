@@ -3,17 +3,19 @@ const IDB = Symbol("idb");
 
 export class EverCache {
   constructor(id = "public") {
-    this[SName] = id;
+    // this[SName] = id;
+    this[SName] = "main";
 
     this[IDB] = new Promise((resolve) => {
-      let req = indexedDB.open("ever-cache");
+      let req = indexedDB.open(`ever-cache-${id}`);
 
       req.onsuccess = (e) => {
         resolve(e.target.result);
       };
 
       req.onupgradeneeded = (e) => {
-        e.target.result.createObjectStore(id, { keyPath: "key" });
+        // e.target.result.createObjectStore(id, { keyPath: "key" });
+        e.target.result.createObjectStore("main", { keyPath: "key" });
       };
     });
 
