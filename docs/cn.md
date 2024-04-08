@@ -2,25 +2,27 @@
 
 ## 简介
 
-EverCache 是一个基于 IndexedDB 的缓存库，它提供了类似于 `localStorage` 的 API，但是具有异步操作、更大的存储容量和更复杂的数据类型支持等优势。
+EverCache 是一个高效且易于使用的缓存库，它基于 IndexedDB 构建，并提供了类似 localStorage 的接口。与 localStorage 相比，EverCache 支持异步操作、更大的存储空间以及对复杂数据类型的兼容。
 
-EverCache与其它的基于indexDB仿localStorage的库不一样，它可以直接通过键名获取或赋值，而不必使用 `getItem` 或 `setItem`方法。
+EverCache 的独特之处在于它允许您直接通过键名来存取数据，而无需调用特定的 setItem 或 getItem 方法。
 
 ```javascript
 import { storage } from "ever-cache";
 
 storage.myKey = { name: 'John', age: 30 };
+// 等同于
 // await storage.setItem('myKey', { name: 'John', age: 30 });
 
 const data = await storage.myKey;
+// 等同于
 // const data = await storage.getItem('myKey');
 ```
 
-不仅使用方便，而且代码还十分精简，minify后的文件不到2kb。
+EverCache 的代码简洁高效，压缩后的文件体积小于2KB，为您的项目提供轻量级的缓存解决方案。
 
 ## 安装
 
-EverCache 可以通过npm或直接通过浏览器原生的`import`语法引入到您的项目中。
+EverCache 可以通过npm包管理器安装，或通过浏览器的原生ESModule语法直接引入。
 
 ### npm 安装
 
@@ -38,12 +40,12 @@ npm install ever-cache
 
 ## 快速开始
 
-### 创建 EverCache 实例
+### 初始化 EverCache 实例
 
 ```javascript
-import { storage } from "ever-cache"; // npm安装后，有nodejs打包器的环境下
-// or
-import { storage } from "https://cdn.jsdelivr.net/gh/kirakiray/ever-cache/src/main.min.js"; // 使用浏览器原生 ESModule
+import { storage } from "ever-cache"; // 使用npm安装，在支持nodejs的环境中，给web项目使用
+// 或者
+import { storage } from "https://cdn.jsdelivr.net/gh/kirakiray/ever-cache/src/main.min.js"; // 使用浏览器的ESModule功能
 ```
 
 ### 存储数据
@@ -121,7 +123,7 @@ async function firstKeys() {
 firstKeys();
 ```
 
-### 获取数据长度
+### 查询数据长度
 
 使用 `length` 属性获取缓存中存储的键值对数量。
 
@@ -130,9 +132,9 @@ const count = await storage.length;
 console.log('Number of items:', count);
 ```
 
-### 迭代数据
+### 数据迭代
 
-通过 `entries()`、`keys()` 或 `values()` 方法遍历 storage 上的数据；
+利用 entries()、keys() 和 values() 方法来迭代缓存中的数据。
 
 ```javascript
 (async()=>{
@@ -150,9 +152,9 @@ console.log('Number of items:', count);
 
 ## 高级用法
 
-### 自定义对象存储名称
+### 自定义存储名称
 
-可以通过 `new EverCache('custom-storage-name')` 创建专属的 storage，生成的 storage 和其他命名的 storage 数据会隔离开。
+您可以通过创建 EverCache 的实例并指定一个唯一的存储名称来创建独立的缓存空间。
 
 ```javascript
 import { EverCache } from "ever-cache"; // npm安装后，有nodejs打包器的环境下
@@ -162,10 +164,10 @@ import { EverCache } from "https://cdn.jsdelivr.net/gh/kirakiray/ever-cache/src/
 const customStorage = new EverCache('custom-name');
 ```
 
-创建后的 `customStorage` 可以使用的方法和前面 `storage` 保持一致。
+创建后的 customStorage 实例将提供与 storage 相同的方法和功能。
 
 ## 注意事项
 
 - EverCache 操作是基于 Promise 的，因此您需要使用 `async/await` 或 `.then()` 和 `.catch()` 来处理异步操作。
 - 请确保您的浏览器支持 IndexedDB。大多数现代浏览器都支持，但是在一些旧版浏览器中可能不可用。
-- 如果直接通过键获取或赋值有问题，可以改用 `setItem` 和 `getItem` 看能否解决问题。
+- 如果直接通过键名进行数据存取遇到问题，可以尝试使用 setItem 和 getItem 方法作为替代解决方案。
