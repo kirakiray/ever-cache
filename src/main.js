@@ -21,56 +21,51 @@ export class EverCache {
   }
 
   async setItem(key, value) {
-    return commonTask(
-      this,
-      (store) => store.put({ key, value }),
+    return commonTask(this, (store) => store.put({ key, value })).then(
       () => true
     );
   }
 
   async getItem(key) {
-    return commonTask(
-      this,
-      (store) => store.get(key),
-      (e) => {
-        const { result } = e.target;
-        return result ? result.value : null;
-      },
-      "readonly"
-    );
+    return commonTask(this, (store) => store.get(key), "readonly").then((e) => {
+      const { result } = e.target;
+      return result ? result.value : null;
+    });
   }
 
   async removeItem(key) {
-    return commonTask(
-      this,
-      (store) => store.delete(key),
-      () => true
-    );
+    return commonTask(this, (store) => store.delete(key)).then(() => true);
   }
 
   async clear() {
-    return commonTask(
-      this,
-      (store) => store.clear(),
-      () => true
-    );
+    return commonTask(this, (store) => store.clear()).then(() => true);
   }
 
   async key(index) {
-    return commonTask(
-      this,
-      (store) => store.getAllKeys(),
+    return commonTask(this, (store) => store.getAllKeys()).then(
       (e) => e.target.result[index]
     );
   }
 
   get length() {
-    return commonTask(
-      this,
-      (store) => store.count(),
+    return commonTask(this, (store) => store.count()).then(
       (e) => e.target.result
     );
   }
+
+  // async keys() {}
+
+  // async values() {}
+
+  // async entries() {
+  //   commonTask(
+  //     this,
+  //     (store) => store.count(),
+  //     (e) => e.target.result
+  //   );
+
+  //   debugger;
+  // }
 }
 
 const exitedKeys = new Set(Object.getOwnPropertyNames(EverCache.prototype));
@@ -91,7 +86,7 @@ const handle = {
   },
 };
 
-const commonTask = async (_this, afterStore, succeed, mode = "readwrite") => {
+const commonTask = async (_this, afterStore, mode = "readwrite") => {
   const db = await _this[IDB];
 
   return new Promise((resolve, reject) => {
@@ -100,7 +95,8 @@ const commonTask = async (_this, afterStore, succeed, mode = "readwrite") => {
     );
 
     req.onsuccess = (e) => {
-      resolve(succeed(e));
+      // resolve(succeed(e));
+      resolve(e);
     };
     req.onerror = (e) => {
       reject(e);

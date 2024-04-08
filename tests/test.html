@@ -82,6 +82,10 @@
           document.querySelector("#lenok").innerHTML = "length ok";
         }
 
+        // for (let item of await storage.entries()) {
+        //   debugger;
+        // }
+
         await storage.clear();
 
         if ((await storage.length) === 0) {
