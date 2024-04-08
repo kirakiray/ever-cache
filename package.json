@@ -1,6 +1,6 @@
 {
   "name": "ever-cache",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "description": "Use a localStorage-like API encapsulated by indexdb",
   "main": "src/main.js",
