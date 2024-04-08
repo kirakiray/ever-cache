@@ -1,6 +1,9 @@
 # EverCache Documentation
 
-- [中文文档](./docs/cn.md)
+- [中文](./docs/cn.md)
+- [español](./docs/sp.md)
+- [日本語](./docs/jp.md)
+- [한국인](./docs/ko.md)
 
 ## Introduction
 
