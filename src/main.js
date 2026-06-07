@@ -1,5 +1,6 @@
 const SName = Symbol("storage-name");
 const IDB = Symbol("idb");
+const BC = Symbol("bc");
 let lengthWarned = false;
 
 export class EverCache {
@@ -8,8 +9,8 @@ export class EverCache {
     this[IDB] = this._openDB(id);
 
     if (typeof BroadcastChannel !== "undefined") {
-      this._bc = new BroadcastChannel(`ever-cache-${id}`);
-      this._bc.onmessage = (e) => {
+      this[BC] = new BroadcastChannel(`ever-cache-${id}`);
+      this[BC].onmessage = (e) => {
         const { key, oldValue, newValue } = e.data;
         if (typeof window !== "undefined") {
           window.dispatchEvent(
@@ -29,8 +30,8 @@ export class EverCache {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("ever-cache-storage", { detail }));
     }
-    if (this._bc) {
-      this._bc.postMessage(detail);
+    if (this[BC]) {
+      this[BC].postMessage(detail);
     }
   }
 
@@ -64,32 +65,60 @@ export class EverCache {
     });
   }
 
-  async setItem(key, value) {
-    const oldValue = await this.getItem(key);
-    return commonTask(this, (store) => store.put({ key, value })).then(
-      () => {
-        this._emitChange(key, oldValue, value);
-        return true;
-      },
-    );
+  setItem(key, value) {
+    return this[IDB].then((db) => {
+      return new Promise((resolve, reject) => {
+        const store = db
+          .transaction([this[SName]], "readwrite")
+          .objectStore(this[SName]);
+        const getReq = store.get(key);
+
+        getReq.onsuccess = (e) => {
+          const oldValue = e.target.result ? e.target.result.value : null;
+          const putReq = store.put({ key, value });
+
+          putReq.onsuccess = () => {
+            this._emitChange(key, oldValue, value);
+            resolve(true);
+          };
+          putReq.onerror = (err) => reject(err.target.error || err);
+        };
+        getReq.onerror = (err) => reject(err.target.error || err);
+      });
+    });
   }
 
-  async getItem(key) {
+  getItem(key) {
     return commonTask(this, (store) => store.get(key), "readonly").then((e) => {
       const { result } = e.target;
       return result ? result.value : null;
     });
   }
 
-  async removeItem(key) {
-    const oldValue = await this.getItem(key);
-    return commonTask(this, (store) => store.delete(key)).then(() => {
-      this._emitChange(key, oldValue, null);
-      return true;
+  removeItem(key) {
+    return this[IDB].then((db) => {
+      return new Promise((resolve, reject) => {
+        const store = db
+          .transaction([this[SName]], "readwrite")
+          .objectStore(this[SName]);
+        const getReq = store.get(key);
+
+        getReq.onsuccess = (e) => {
+          const oldValue = e.target.result ? e.target.result.value : null;
+          const delReq = store.delete(key);
+
+          delReq.onsuccess = () => {
+            this._emitChange(key, oldValue, null);
+            resolve(true);
+          };
+          delReq.onerror = (err) => reject(err.target.error || err);
+        };
+        getReq.onerror = (err) => reject(err.target.error || err);
+      });
     });
   }
 
-  async clear() {
+  clear() {
     return commonTask(this, (store) => store.clear()).then(() => {
       this._emitChange(null, null, null);
       return true;
