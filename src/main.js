@@ -7,7 +7,31 @@ export class EverCache {
     this[SName] = id;
     this[IDB] = this._openDB(id);
 
+    if (typeof BroadcastChannel !== "undefined") {
+      this._bc = new BroadcastChannel(`ever-cache-${id}`);
+      this._bc.onmessage = (e) => {
+        const { key, oldValue, newValue } = e.data;
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("ever-cache-storage", {
+              detail: { key, oldValue, newValue, cacheId: id },
+            })
+          );
+        }
+      };
+    }
+
     return new Proxy(this, handle);
+  }
+
+  _emitChange(key, oldValue, newValue) {
+    const detail = { key, oldValue, newValue, cacheId: this[SName] };
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ever-cache-storage", { detail }));
+    }
+    if (this._bc) {
+      this._bc.postMessage(detail);
+    }
   }
 
   _openDB(id) {
@@ -41,8 +65,12 @@ export class EverCache {
   }
 
   async setItem(key, value) {
+    const oldValue = await this.getItem(key);
     return commonTask(this, (store) => store.put({ key, value })).then(
-      () => true,
+      () => {
+        this._emitChange(key, oldValue, value);
+        return true;
+      },
     );
   }
 
@@ -54,11 +82,18 @@ export class EverCache {
   }
 
   async removeItem(key) {
-    return commonTask(this, (store) => store.delete(key)).then(() => true);
+    const oldValue = await this.getItem(key);
+    return commonTask(this, (store) => store.delete(key)).then(() => {
+      this._emitChange(key, oldValue, null);
+      return true;
+    });
   }
 
   async clear() {
-    return commonTask(this, (store) => store.clear()).then(() => true);
+    return commonTask(this, (store) => store.clear()).then(() => {
+      this._emitChange(null, null, null);
+      return true;
+    });
   }
 
   async key(index) {
