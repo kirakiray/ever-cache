@@ -1,30 +1,48 @@
 const SName = Symbol("storage-name");
 const IDB = Symbol("idb");
+let lengthWarned = false;
 
 export class EverCache {
   constructor(id = "public") {
-    // this[SName] = id;
-    this[SName] = "main";
-
-    this[IDB] = new Promise((resolve) => {
-      let req = indexedDB.open(`ever-cache-${id}`);
-
-      req.onsuccess = (e) => {
-        resolve(e.target.result);
-      };
-
-      req.onupgradeneeded = (e) => {
-        // e.target.result.createObjectStore(id, { keyPath: "key" });
-        e.target.result.createObjectStore("main", { keyPath: "key" });
-      };
-    });
+    this[SName] = id;
+    this[IDB] = this._openDB(id);
 
     return new Proxy(this, handle);
   }
 
+  _openDB(id) {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(`ever-cache-${id}`);
+
+      req.onsuccess = (e) => {
+        const db = e.target.result;
+        // 连接被外部关闭（页面回收/主动 close）后，下一次操作前自动重连
+        db.onclose = () => {
+          this[IDB] = this._openDB(id);
+        };
+        resolve(db);
+      };
+
+      req.onupgradeneeded = (e) => {
+        e.target.result.createObjectStore(id, { keyPath: "key" });
+      };
+
+      // 其它标签页持有旧版本，open 被阻塞
+      req.onblocked = () => {
+        reject(
+          new Error(`ever-cache: open blocked for "${id}", close other tabs`),
+        );
+      };
+
+      req.onerror = (e) => {
+        reject(e.target.error || e);
+      };
+    });
+  }
+
   async setItem(key, value) {
     return commonTask(this, (store) => store.put({ key, value })).then(
-      () => true
+      () => true,
     );
   }
 
@@ -44,12 +62,36 @@ export class EverCache {
   }
 
   async key(index) {
-    return commonTask(this, (store) => store.getAllKeys()).then(
-      (e) => e.target.result[index]
-    );
+    const db = await this[IDB];
+    return new Promise((resolve, reject) => {
+      const req = db
+        .transaction([this[SName]], "readonly")
+        .objectStore(this[SName])
+        .openKeyCursor();
+      let i = 0;
+      req.onsuccess = (e) => {
+        const cur = e.target.result;
+        if (!cur) {
+          resolve(undefined);
+          return;
+        }
+        if (i++ === index) {
+          resolve(cur.key);
+          return;
+        }
+        cur.continue();
+      };
+      req.onerror = (e) => reject(e.target.error || e);
+    });
   }
 
   get length() {
+    if (!lengthWarned) {
+      console.warn(
+        "ever-cache: `length` is async and returns a Promise, remember to `await` it."
+      );
+      lengthWarned = true;
+    }
     return commonTask(this, (store) => store.count()).then(
       (e) => e.target.result
     );
@@ -69,7 +111,7 @@ export class EverCache {
           this,
           (store) => store.openCursor(),
           "readonly",
-          (e) => resolve(e.target.result)
+          (e) => resolve(e.target.result),
         );
 
         return {
@@ -122,29 +164,24 @@ const handle = {
   },
 };
 
-const commonTask = async (_this, afterStore, mode = "readwrite", succeed) => {
-  const db = await _this[IDB];
+const commonTask = (_this, afterStore, mode = "readwrite", succeed) => {
+  return _this[IDB].then((db) => {
+    return new Promise((resolve, reject) => {
+      const req = afterStore(
+        db.transaction([_this[SName]], mode).objectStore(_this[SName]),
+      );
 
-  return new Promise((resolve, reject) => {
-    const req = afterStore(
-      db.transaction([_this[SName]], mode).objectStore(_this[SName])
-    );
-
-    req.onsuccess = (e) => {
-      if (succeed) {
-        const result = succeed(e);
-        if (result) {
-          resolve(result);
+      req.onsuccess = (e) => {
+        if (succeed) {
+          resolve(succeed(e));
+          return;
         }
-
-        return;
-      }
-
-      resolve(e);
-    };
-    req.onerror = (e) => {
-      reject(e);
-    };
+        resolve(e);
+      };
+      req.onerror = (e) => {
+        reject(e.target.error || e);
+      };
+    });
   });
 };
 
