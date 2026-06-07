@@ -5,7 +5,7 @@
   "description": "Use a localStorage-like API encapsulated by indexdb",
   "main": "src/main.js",
   "scripts": {
-    "static": "node ./scripts/static-server.js",
+    "static": "npx http-server . -p 5566 --cors",
     "test": "npx playwright test",
     "ci-test": "node scripts/ci-test.js"
   },
@@ -14,8 +14,6 @@
   "devDependencies": {
     "@playwright/test": "^1.43.0",
     "@types/node": "^20.12.5",
-    "koa": "^2.15.2",
-    "koa-static": "^5.0.0",
     "shelljs": "^0.8.5"
   },
   "keywords": [

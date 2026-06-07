@@ -74,14 +74,18 @@ export class EverCache {
         const getReq = store.get(key);
 
         getReq.onsuccess = (e) => {
-          const oldValue = e.target.result ? e.target.result.value : null;
-          const putReq = store.put({ key, value });
+          try {
+            const oldValue = e.target.result ? e.target.result.value : null;
+            const putReq = store.put({ key, value });
 
-          putReq.onsuccess = () => {
-            this._emitChange(key, oldValue, value);
-            resolve(true);
-          };
-          putReq.onerror = (err) => reject(err.target.error || err);
+            putReq.onsuccess = () => {
+              this._emitChange(key, oldValue, value);
+              resolve(true);
+            };
+            putReq.onerror = (err) => reject(err.target.error || err);
+          } catch (err) {
+            reject(err);
+          }
         };
         getReq.onerror = (err) => reject(err.target.error || err);
       });
@@ -104,14 +108,18 @@ export class EverCache {
         const getReq = store.get(key);
 
         getReq.onsuccess = (e) => {
-          const oldValue = e.target.result ? e.target.result.value : null;
-          const delReq = store.delete(key);
+          try {
+            const oldValue = e.target.result ? e.target.result.value : null;
+            const delReq = store.delete(key);
 
-          delReq.onsuccess = () => {
-            this._emitChange(key, oldValue, null);
-            resolve(true);
-          };
-          delReq.onerror = (err) => reject(err.target.error || err);
+            delReq.onsuccess = () => {
+              this._emitChange(key, oldValue, null);
+              resolve(true);
+            };
+            delReq.onerror = (err) => reject(err.target.error || err);
+          } catch (err) {
+            reject(err);
+          }
         };
         getReq.onerror = (err) => reject(err.target.error || err);
       });
@@ -132,18 +140,23 @@ export class EverCache {
         .transaction([this[SName]], "readonly")
         .objectStore(this[SName])
         .openKeyCursor();
-      let i = 0;
+      let advanced = false;
       req.onsuccess = (e) => {
         const cur = e.target.result;
         if (!cur) {
           resolve(undefined);
           return;
         }
-        if (i++ === index) {
+        if (index === 0) {
           resolve(cur.key);
           return;
         }
-        cur.continue();
+        if (!advanced) {
+          advanced = true;
+          cur.advance(index);
+        } else {
+          resolve(cur.key);
+        }
       };
       req.onerror = (e) => reject(e.target.error || e);
     });
@@ -161,40 +174,43 @@ export class EverCache {
     );
   }
 
-  entries() {
-    return {
-      [Symbol.asyncIterator]: () => {
-        let resolve;
-        let cursorPms;
-        const resetPms = () => {
-          cursorPms = new Promise((res) => (resolve = res));
-        };
-        resetPms();
+  async *entries() {
+    const db = await this[IDB];
+    let lastKey;
+    let hasMore = true;
+    const KeyRange = typeof IDBKeyRange !== "undefined" ? IDBKeyRange : globalThis.IDBKeyRange;
 
-        commonTask(
-          this,
-          (store) => store.openCursor(),
-          "readonly",
-          (e) => resolve(e.target.result),
-        );
-
-        return {
-          async next() {
-            const cursor = await cursorPms;
-            if (!cursor) {
-              return {
-                done: true,
-              };
+    while (hasMore) {
+      const batch = await new Promise((resolve, reject) => {
+        const tx = db.transaction([this[SName]], "readonly");
+        const store = tx.objectStore(this[SName]);
+        const req = lastKey !== undefined ? store.openCursor(KeyRange.lowerBound(lastKey, true)) : store.openCursor();
+        const items = [];
+        
+        req.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            items.push([cursor.key, cursor.value]);
+            if (items.length < 50) {
+              cursor.continue();
+            } else {
+              resolve({ items, hasMore: true });
             }
-            resetPms();
-            const { key, value } = cursor.value;
-            cursor.continue();
-
-            return { value: [key, value], done: false };
-          },
+          } else {
+            resolve({ items, hasMore: false });
+          }
         };
-      },
-    };
+        req.onerror = (e) => reject(e.target.error || e);
+      });
+
+      for (const item of batch.items) {
+        yield item;
+      }
+      hasMore = batch.hasMore;
+      if (hasMore) {
+        lastKey = batch.items[batch.items.length - 1][0];
+      }
+    }
   }
 
   async *keys() {
@@ -210,21 +226,21 @@ export class EverCache {
   }
 }
 
-const exitedKeys = new Set(Object.getOwnPropertyNames(EverCache.prototype));
-
 const handle = {
   get(target, key, receiver) {
-    if (exitedKeys.has(key) || typeof key === "symbol") {
+    if (key in target || typeof key === "symbol" || key === "then") {
       return Reflect.get(target, key, receiver);
     }
 
     return target.getItem(key);
   },
   set(target, key, value) {
-    return target.setItem(key, value);
+    target.setItem(key, value).catch(() => {});
+    return true;
   },
   deleteProperty(target, key) {
-    return target.removeItem(key);
+    target.removeItem(key).catch(() => {});
+    return true;
   },
 };
 
