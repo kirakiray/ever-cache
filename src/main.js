@@ -1,94 +1,216 @@
 const SName = Symbol("storage-name");
 const IDB = Symbol("idb");
+const BC = Symbol("bc");
+let lengthWarned = false;
 
 export class EverCache {
   constructor(id = "public") {
-    // this[SName] = id;
-    this[SName] = "main";
+    this[SName] = id;
+    this[IDB] = this._openDB(id);
 
-    this[IDB] = new Promise((resolve) => {
-      let req = indexedDB.open(`ever-cache-${id}`);
-
-      req.onsuccess = (e) => {
-        resolve(e.target.result);
+    if (typeof BroadcastChannel !== "undefined") {
+      this[BC] = new BroadcastChannel(`ever-cache-${id}`);
+      this[BC].onmessage = (e) => {
+        const { key, oldValue, newValue } = e.data;
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("ever-cache-storage", {
+              detail: { key, oldValue, newValue, cacheId: id },
+            })
+          );
+        }
       };
-
-      req.onupgradeneeded = (e) => {
-        // e.target.result.createObjectStore(id, { keyPath: "key" });
-        e.target.result.createObjectStore("main", { keyPath: "key" });
-      };
-    });
+    }
 
     return new Proxy(this, handle);
   }
 
-  async setItem(key, value) {
-    return commonTask(this, (store) => store.put({ key, value })).then(
-      () => true
-    );
+  _emitChange(key, oldValue, newValue) {
+    const detail = { key, oldValue, newValue, cacheId: this[SName] };
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("ever-cache-storage", { detail }));
+    }
+    if (this[BC]) {
+      this[BC].postMessage(detail);
+    }
   }
 
-  async getItem(key) {
+  _openDB(id) {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(`ever-cache-${id}`);
+
+      req.onsuccess = (e) => {
+        const db = e.target.result;
+        // 连接被外部关闭（页面回收/主动 close）后，下一次操作前自动重连
+        db.onclose = () => {
+          this[IDB] = this._openDB(id);
+        };
+        resolve(db);
+      };
+
+      req.onupgradeneeded = (e) => {
+        e.target.result.createObjectStore(id, { keyPath: "key" });
+      };
+
+      // 其它标签页持有旧版本，open 被阻塞
+      req.onblocked = () => {
+        reject(
+          new Error(`ever-cache: open blocked for "${id}", close other tabs`),
+        );
+      };
+
+      req.onerror = (e) => {
+        reject(e.target.error || e);
+      };
+    });
+  }
+
+  setItem(key, value) {
+    return this[IDB].then((db) => {
+      return new Promise((resolve, reject) => {
+        const store = db
+          .transaction([this[SName]], "readwrite")
+          .objectStore(this[SName]);
+        const getReq = store.get(key);
+
+        getReq.onsuccess = (e) => {
+          try {
+            const oldValue = e.target.result ? e.target.result.value : null;
+            const putReq = store.put({ key, value });
+
+            putReq.onsuccess = () => {
+              this._emitChange(key, oldValue, value);
+              resolve(true);
+            };
+            putReq.onerror = (err) => reject(err.target.error || err);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        getReq.onerror = (err) => reject(err.target.error || err);
+      });
+    });
+  }
+
+  getItem(key) {
     return commonTask(this, (store) => store.get(key), "readonly").then((e) => {
       const { result } = e.target;
       return result ? result.value : null;
     });
   }
 
-  async removeItem(key) {
-    return commonTask(this, (store) => store.delete(key)).then(() => true);
+  removeItem(key) {
+    return this[IDB].then((db) => {
+      return new Promise((resolve, reject) => {
+        const store = db
+          .transaction([this[SName]], "readwrite")
+          .objectStore(this[SName]);
+        const getReq = store.get(key);
+
+        getReq.onsuccess = (e) => {
+          try {
+            const oldValue = e.target.result ? e.target.result.value : null;
+            const delReq = store.delete(key);
+
+            delReq.onsuccess = () => {
+              this._emitChange(key, oldValue, null);
+              resolve(true);
+            };
+            delReq.onerror = (err) => reject(err.target.error || err);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        getReq.onerror = (err) => reject(err.target.error || err);
+      });
+    });
   }
 
-  async clear() {
-    return commonTask(this, (store) => store.clear()).then(() => true);
+  clear() {
+    return commonTask(this, (store) => store.clear()).then(() => {
+      this._emitChange(null, null, null);
+      return true;
+    });
   }
 
   async key(index) {
-    return commonTask(this, (store) => store.getAllKeys()).then(
-      (e) => e.target.result[index]
-    );
+    const db = await this[IDB];
+    return new Promise((resolve, reject) => {
+      const req = db
+        .transaction([this[SName]], "readonly")
+        .objectStore(this[SName])
+        .openKeyCursor();
+      let advanced = false;
+      req.onsuccess = (e) => {
+        const cur = e.target.result;
+        if (!cur) {
+          resolve(undefined);
+          return;
+        }
+        if (index === 0) {
+          resolve(cur.key);
+          return;
+        }
+        if (!advanced) {
+          advanced = true;
+          cur.advance(index);
+        } else {
+          resolve(cur.key);
+        }
+      };
+      req.onerror = (e) => reject(e.target.error || e);
+    });
   }
 
   get length() {
+    if (!lengthWarned) {
+      console.warn(
+        "ever-cache: `length` is async and returns a Promise, remember to `await` it."
+      );
+      lengthWarned = true;
+    }
     return commonTask(this, (store) => store.count()).then(
       (e) => e.target.result
     );
   }
 
-  entries() {
-    return {
-      [Symbol.asyncIterator]: () => {
-        let resolve;
-        let cursorPms;
-        const resetPms = () => {
-          cursorPms = new Promise((res) => (resolve = res));
-        };
-        resetPms();
+  async *entries() {
+    const db = await this[IDB];
+    let lastKey;
+    let hasMore = true;
+    const KeyRange = typeof IDBKeyRange !== "undefined" ? IDBKeyRange : globalThis.IDBKeyRange;
 
-        commonTask(
-          this,
-          (store) => store.openCursor(),
-          "readonly",
-          (e) => resolve(e.target.result)
-        );
-
-        return {
-          async next() {
-            const cursor = await cursorPms;
-            if (!cursor) {
-              return {
-                done: true,
-              };
+    while (hasMore) {
+      const batch = await new Promise((resolve, reject) => {
+        const tx = db.transaction([this[SName]], "readonly");
+        const store = tx.objectStore(this[SName]);
+        const req = lastKey !== undefined ? store.openCursor(KeyRange.lowerBound(lastKey, true)) : store.openCursor();
+        const items = [];
+        
+        req.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            items.push([cursor.key, cursor.value]);
+            if (items.length < 50) {
+              cursor.continue();
+            } else {
+              resolve({ items, hasMore: true });
             }
-            resetPms();
-            const { key, value } = cursor.value;
-            cursor.continue();
-
-            return { value: [key, value], done: false };
-          },
+          } else {
+            resolve({ items, hasMore: false });
+          }
         };
-      },
-    };
+        req.onerror = (e) => reject(e.target.error || e);
+      });
+
+      for (const item of batch.items) {
+        yield item;
+      }
+      hasMore = batch.hasMore;
+      if (hasMore) {
+        lastKey = batch.items[batch.items.length - 1][0];
+      }
+    }
   }
 
   async *keys() {
@@ -104,47 +226,42 @@ export class EverCache {
   }
 }
 
-const exitedKeys = new Set(Object.getOwnPropertyNames(EverCache.prototype));
-
 const handle = {
   get(target, key, receiver) {
-    if (exitedKeys.has(key) || typeof key === "symbol") {
+    if (key in target || typeof key === "symbol" || key === "then") {
       return Reflect.get(target, key, receiver);
     }
 
     return target.getItem(key);
   },
   set(target, key, value) {
-    return target.setItem(key, value);
+    target.setItem(key, value).catch(() => {});
+    return true;
   },
   deleteProperty(target, key) {
-    return target.removeItem(key);
+    target.removeItem(key).catch(() => {});
+    return true;
   },
 };
 
-const commonTask = async (_this, afterStore, mode = "readwrite", succeed) => {
-  const db = await _this[IDB];
+const commonTask = (_this, afterStore, mode = "readwrite", succeed) => {
+  return _this[IDB].then((db) => {
+    return new Promise((resolve, reject) => {
+      const req = afterStore(
+        db.transaction([_this[SName]], mode).objectStore(_this[SName]),
+      );
 
-  return new Promise((resolve, reject) => {
-    const req = afterStore(
-      db.transaction([_this[SName]], mode).objectStore(_this[SName])
-    );
-
-    req.onsuccess = (e) => {
-      if (succeed) {
-        const result = succeed(e);
-        if (result) {
-          resolve(result);
+      req.onsuccess = (e) => {
+        if (succeed) {
+          resolve(succeed(e));
+          return;
         }
-
-        return;
-      }
-
-      resolve(e);
-    };
-    req.onerror = (e) => {
-      reject(e);
-    };
+        resolve(e);
+      };
+      req.onerror = (e) => {
+        reject(e.target.error || e);
+      };
+    });
   });
 };
 

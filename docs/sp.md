@@ -166,8 +166,33 @@ const customStorage = new EverCache('nombre personalizado');
 
 La instancia customStorage creada proporcionará los mismos métodos y funcionalidades que storage.
 
+## Sincronización entre pestañas
+
+EverCache utiliza BroadcastChannel para sincronizar automáticamente los cambios de datos entre las pestañas del navegador. Cuando se modifican datos en una pestaña, todas las demás pestañas que usan la misma instancia de caché recibirán el evento de cambio.
+
+### Escuchar cambios de almacenamiento
+
+Puede escuchar los cambios de almacenamiento usando el evento personalizado `ever-cache-storage`:
+
+```javascript
+window.addEventListener('ever-cache-storage', (e) => {
+  const { key, oldValue, newValue, cacheId } = e.detail;
+  console.log(`Clave "${key}" cambió de`, oldValue, 'a', newValue);
+  console.log('ID de caché:', cacheId);
+});
+```
+
+Este evento se dispara cuando:
+- Se llama a `setItem`
+- Se llama a `removeItem`
+- Se llama a `clear`
+- Ocurren cambios entre pestañas
+
 ## Precauciones
 
 - Las operaciones de EverCache se basan en Promises, por lo que necesitará usar `async/await` o `.then()` y `.catch()` para manejar operaciones asíncronas.
 - Asegúrese de que su navegador admita IndexedDB. La mayoría de los navegadores modernos lo hacen, pero puede no estar disponible en algunas versiones antiguas de navegadores.
 - Si encuentra problemas al almacenar y recuperar datos directamente a través de nombres de clave, puede intentar usar los métodos setItem e getItem como soluciones alternativas.
+- Al usar la sintaxis de proxy (`storage.key`), los errores se capturan silenciosamente. Si necesita manejo de errores, use los métodos `setItem`/`getItem`/`removeItem`.
+- Si ve un error de "open blocked", cierre otras pestañas que puedan estar usando una versión anterior de la base de datos.
+- La conexión a la base de datos se reconecta automáticamente si se cierra externamente.

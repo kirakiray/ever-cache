@@ -166,8 +166,33 @@ const customStorage = new EverCache('custom-name');
 
 创建后的 customStorage 实例将提供与 storage 相同的方法和功能。
 
+## 跨标签页同步
+
+EverCache 使用 BroadcastChannel 自动在浏览器标签页之间同步数据变化。当一个标签页中的数据被修改时，所有其他使用相同缓存实例的标签页都会收到变化事件。
+
+### 监听存储变化
+
+您可以使用 `ever-cache-storage` 自定义事件来监听存储变化：
+
+```javascript
+window.addEventListener('ever-cache-storage', (e) => {
+  const { key, oldValue, newValue, cacheId } = e.detail;
+  console.log(`键 "${key}" 从`, oldValue, '变为', newValue);
+  console.log('缓存 ID:', cacheId);
+});
+```
+
+此事件在以下情况下触发：
+- 调用 `setItem` 时
+- 调用 `removeItem` 时
+- 调用 `clear` 时
+- 跨标签页发生数据变化时
+
 ## 注意事项
 
 - EverCache 操作是基于 Promise 的，因此您需要使用 `async/await` 或 `.then()` 和 `.catch()` 来处理异步操作。
 - 请确保您的浏览器支持 IndexedDB。大多数现代浏览器都支持，但是在一些旧版浏览器中可能不可用。
 - 如果直接通过键名进行数据存取遇到问题，可以尝试使用 setItem 和 getItem 方法作为替代解决方案。
+- 使用代理语法（`storage.key`）时，错误会被静默捕获。如果需要错误处理，请使用 `setItem`/`getItem`/`removeItem` 方法。
+- 如果看到 "open blocked" 错误，请关闭其他可能使用旧版本数据库的标签页。
+- 数据库连接在外部关闭后会自动重连。

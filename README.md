@@ -171,8 +171,33 @@ const customStorage = new EverCache('custom-name');
 
 The created customStorage instance will provide the same methods and functionalities as storage.
 
+## Cross-Tab Synchronization
+
+EverCache automatically synchronizes data changes across browser tabs using BroadcastChannel. When data is modified in one tab, all other tabs with the same cache instance will receive the change event.
+
+### Listening to Storage Changes
+
+You can listen to storage changes using the `ever-cache-storage` custom event:
+
+```javascript
+window.addEventListener('ever-cache-storage', (e) => {
+  const { key, oldValue, newValue, cacheId } = e.detail;
+  console.log(`Key "${key}" changed from`, oldValue, 'to', newValue);
+  console.log('Cache ID:', cacheId);
+});
+```
+
+This event is triggered:
+- When `setItem` is called
+- When `removeItem` is called
+- When `clear` is called
+- Across all tabs when changes occur
+
 ## Notes
 
 - EverCache operations are based on Promises, so you will need to use `async/await` or `.then()` and `.catch()` to handle asynchronous operations.
 - Please ensure that your browser supports IndexedDB. Most modern browsers do, but it may not be available in some older browsers.
 - If you encounter problems with direct data storage and retrieval using key names, you can try using setItem and getItem methods as alternative solutions.
+- When using proxy syntax (`storage.key`), errors are silently caught. Use `setItem`/`getItem`/`removeItem` methods if you need error handling.
+- If you see an error about "open blocked", close other tabs that might be using an older version of the database.
+- The database connection automatically reconnects if it's closed externally.
