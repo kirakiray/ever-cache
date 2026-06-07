@@ -5,6 +5,7 @@
   "description": "Use a localStorage-like API encapsulated by indexdb",
   "main": "src/main.js",
   "scripts": {
+    "build": "rollup -c",
     "static": "npx http-server . -p 5566 --cors",
     "test": "npx playwright test",
     "ci-test": "node scripts/ci-test.js"
@@ -13,7 +14,9 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@playwright/test": "^1.43.0",
+    "@rollup/plugin-terser": "^0.4.4",
     "@types/node": "^20.12.5",
+    "rollup": "^4.18.0",
     "shelljs": "^0.8.5"
   },
   "keywords": [
