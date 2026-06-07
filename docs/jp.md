@@ -165,8 +165,33 @@ const customStorage = new EverCache('custom-name');
 
 生成されたcustomStorageインスタンスは、storageと同じメソッドと機能を提供します。
 
+## クロスタブ同期
+
+EverCacheはBroadcastChannelを使用して、ブラウザのタブ間でデータの変更を自動的に同期します。あるタブでデータが変更されると、同じキャッシュインスタンスを使用する他のすべてのタブが変更イベントを受け取ります。
+
+### ストレージの変更を監視する
+
+`ever-cache-storage`カスタムイベントを使用して、ストレージの変更を監視できます：
+
+```javascript
+window.addEventListener('ever-cache-storage', (e) => {
+  const { key, oldValue, newValue, cacheId } = e.detail;
+  console.log(`キー "${key}" が`, oldValue, 'から', newValue, 'に変更されました');
+  console.log('キャッシュID:', cacheId);
+});
+```
+
+このイベントは以下の場合にトリガーされます：
+- `setItem`が呼び出された時
+- `removeItem`が呼び出された時
+- `clear`が呼び出された時
+- タブ間で変更が発生した時
+
 ## 注意事項
 
 - EverCacheの操作はPromiseに基づいています。そのため、非同期操作を処理するためには`async/await`または`.then()`と`.catch()`を使用する必要があります。
 - あなたのブラウザがIndexedDBをサポートしていることを確認してください。ほとんどの現代のブラウザはサポートしていますが、一部の古いブラウザでは利用できません。
 - キー名を直接使用してデータの保存と取得に問題が発生した場合、setItemとgetItemメソッドを使用する代替的な解決策を試してみてください。
+- プロキシ構文（`storage.key`）を使用する場合、エラーはサイレントにキャッチされます。エラー処理が必要な場合は、`setItem`/`getItem`/`removeItem`メソッドを使用してください。
+- "open blocked"エラーが表示された場合は、古いバージョンのデータベースを使用している可能性のある他のタブを閉じてください。
+- データベース接続は外部で閉じられた場合、自動的に再接続されます。

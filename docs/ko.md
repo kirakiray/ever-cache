@@ -165,8 +165,33 @@ const customStorage = new EverCache('custom-name');
 
 생성된 customStorage 인스턴스는 storage와 동일한 메서드와 기능을 제공합니다.
 
+## 크로스 탭 동기화
+
+EverCache는 BroadcastChannel을 사용하여 브라우저 탭 간에 데이터 변경 사항을 자동으로 동기화합니다. 한 탭에서 데이터가 수정되면 동일한 캐시 인스턴스를 사용하는 다른 모든 탭에서 변경 이벤트를 받습니다.
+
+### 저장소 변경 사항 수신
+
+`ever-cache-storage` 커스텀 이벤트를 사용하여 저장소 변경 사항을 수신할 수 있습니다:
+
+```javascript
+window.addEventListener('ever-cache-storage', (e) => {
+  const { key, oldValue, newValue, cacheId } = e.detail;
+  console.log(`키 "${key}"가`, oldValue, '에서', newValue, '(으)로 변경되었습니다');
+  console.log('캐시 ID:', cacheId);
+});
+```
+
+이 이벤트는 다음 경우에 트리거됩니다:
+- `setItem`이 호출될 때
+- `removeItem`이 호출될 때
+- `clear`가 호출될 때
+- 탭 간에 변경 사항이 발생할 때
+
 ## 주의 사항
 
 - EverCache 작업은 Promise를 기반으로 합니다. 따라서 비동기 작업을 처리하기 위해서는 `async/await` 또는 `.then()`와 `.catch()`를 사용해야 합니다.
 - 브라우저가 IndexedDB를 지원하는지 확인하십시오. 대부분의 현대 브라우저는 지원하지만 일부 오래된 브라우저에서는 사용할 수 없습니다.
 - 키 이름을 직접 사용하여 데이터를 저장하고 검색할 때 문제가 발생하는 경우, setItem과 getItem 메서드를 사용하는 대체적인 해결 방법을 시도해 보십시오.
+- 프록시 구문(`storage.key`)을 사용할 때 오류는 자동으로 캐치됩니다. 오류 처리가 필요한 경우 `setItem`/`getItem`/`removeItem` 메서드를 사용하십시오.
+- "open blocked" 오류가 표시되면 이전 버전의 데이터베이스를 사용 중일 수 있는 다른 탭을 닫으십시오.
+- 데이터베이스 연결은 외부에서 닫힌 경우 자동으로 재연결됩니다.
