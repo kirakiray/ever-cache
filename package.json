@@ -7,8 +7,7 @@
   "scripts": {
     "build": "rollup -c",
     "static": "npx http-server . -p 5566 --cors",
-    "test": "npx playwright test",
-    "ci-test": "node scripts/ci-test.js"
+    "test": "npx playwright test"
   },
   "author": "YAO",
   "license": "Apache-2.0",
