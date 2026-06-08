@@ -1,158 +1,166 @@
-// 私有属性符号
-const SName = Symbol("storage-name"); // 存储名称
-const IDB = Symbol("idb"); // IndexedDB 实例
-const BC = Symbol("bc"); // BroadcastChannel 实例
-const STORE_NAME = "main"; // IndexedDB object store 名称
-let lengthWarned = false; // length 属性警告标志
+const SName = Symbol("storage-name");
+const IDB = Symbol("idb");
+const BC = Symbol("bc");
+const STORE_NAME = "main";
+let lengthWarned = false;
 
-/**
- * EverCache - 基于 IndexedDB 的异步存储类
- * 支持跨标签页同步、事件通知、Proxy 代理访问
- */
+const handleReq = (req, onSuccess, onError) => {
+  req.onsuccess = () => onSuccess(req.result);
+  req.onerror = (e) => onError(e.target.error || e);
+  return req;
+};
+
 export class EverCache {
   constructor(id = "public") {
     this[SName] = id;
-    this[IDB] = this.#openDB(id);
+    this[IDB] = this._openDB(id);
 
-    // 初始化跨标签页广播通道
     if (typeof BroadcastChannel !== "undefined") {
       this[BC] = new BroadcastChannel(`ever-cache-${id}`);
-      this[BC].onmessage = (e) => this.#dispatchEvent(e.data);
+      this[BC].onmessage = (e) => {
+        const { key, oldValue, newValue } = e.data;
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("ever-cache-storage", {
+              detail: { key, oldValue, newValue, cacheId: id },
+            }),
+          );
+        }
+      };
     }
 
-    // 使用 Proxy 支持属性式访问
     return new Proxy(this, handle);
   }
 
-  // 分发自定义存储事件
-  #dispatchEvent(detail) {
+  _emitChange(key, oldValue, newValue) {
+    const detail = { key, oldValue, newValue, cacheId: this[SName] };
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("ever-cache-storage", { detail }));
     }
-  }
-
-  // 触发数据变更事件（本地 + 跨标签页）
-  #emitChange(key, oldValue, newValue) {
-    const detail = { key, oldValue, newValue, cacheId: this[SName] };
-    this.#dispatchEvent(detail);
     this[BC]?.postMessage(detail);
   }
 
-  // 打开或创建 IndexedDB 数据库
-  #openDB(id) {
+  _openDB(id) {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open(`ever-cache-${id}`);
 
-      req.onsuccess = (e) => {
-        const db = e.target.result;
-        // 如果 object store 不存在，需要升级数据库版本创建
+      req.onsuccess = () => {
+        const db = req.result;
+
+        // 检查 object store 是否存在
         if (!db.objectStoreNames.contains(STORE_NAME)) {
+          // object store 不存在，需要升级数据库版本以创建它
           const currentVersion = db.version;
           db.close();
-          const upgradeReq = indexedDB.open(
-            `ever-cache-${id}`,
-            currentVersion + 1,
-          );
-          upgradeReq.onupgradeneeded = (e) =>
-            e.target.result.createObjectStore(STORE_NAME, { keyPath: "key" });
-          upgradeReq.onsuccess = (e) => {
-            e.target.result.onclose = () => (this[IDB] = this.#openDB(id));
-            resolve(e.target.result);
+
+          const upgradeReq = indexedDB.open(`ever-cache-${id}`, currentVersion + 1);
+          upgradeReq.onupgradeneeded = () => {
+            upgradeReq.result.createObjectStore(STORE_NAME, { keyPath: "key" });
+          };
+          upgradeReq.onsuccess = () => {
+            const upgradedDb = upgradeReq.result;
+            upgradedDb.onclose = () => {
+              this[IDB] = this._openDB(id);
+            };
+            resolve(upgradedDb);
           };
           upgradeReq.onerror = (e) => reject(e.target.error || e);
           return;
         }
-        // 连接关闭后自动重连
-        db.onclose = () => (this[IDB] = this.#openDB(id));
+
+        // 连接被外部关闭（页面回收/主动 close）后，下一次操作前自动重连
+        db.onclose = () => {
+          this[IDB] = this._openDB(id);
+        };
         resolve(db);
       };
 
-      req.onupgradeneeded = (e) =>
-        e.target.result.createObjectStore(STORE_NAME, { keyPath: "key" });
-      req.onblocked = () =>
-        reject(
-          new Error(`ever-cache: open blocked for "${id}", close other tabs`),
-        );
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(STORE_NAME, { keyPath: "key" });
+      };
+
+      // 其它标签页持有旧版本，open 被阻塞
+      req.onblocked = () => {
+        reject(new Error(`ever-cache: open blocked for "${id}", close other tabs`));
+      };
+
       req.onerror = (e) => reject(e.target.error || e);
     });
   }
 
-  // 通用的 object store 操作封装
-  #withStore(mode, operation) {
+  _withStore(mode, callback) {
     return this[IDB].then(
       (db) =>
         new Promise((resolve, reject) => {
-          const req = operation(
-            db.transaction([STORE_NAME], mode).objectStore(STORE_NAME),
-          );
-          req.onsuccess = (e) => resolve(e);
-          req.onerror = (e) => reject(e.target.error || e);
+          const store = db.transaction([STORE_NAME], mode).objectStore(STORE_NAME);
+          callback(store, resolve, reject);
         }),
     );
   }
 
-  // 设置数据项
-  setItem(key, value) {
-    return this.#withStore("readwrite", (store) => {
-      const getReq = store.get(key);
-      getReq.onsuccess = (e) => {
-        const oldValue = e.target.result?.value ?? null;
-        const putReq = store.put({ key, value });
-        putReq.onsuccess = () => this.#emitChange(key, oldValue, value);
-        putReq.onerror = (err) => Promise.reject(err.target.error || err);
-      };
-      return getReq;
-    }).then(() => true);
-  }
-
-  // 获取数据项
-  getItem(key) {
-    return this.#withStore("readonly", (store) => store.get(key)).then(
-      (e) => e.target.result?.value ?? null,
-    );
-  }
-
-  // 删除数据项
-  removeItem(key) {
-    return this.#withStore("readwrite", (store) => {
-      const getReq = store.get(key);
-      getReq.onsuccess = (e) => {
-        const oldValue = e.target.result?.value ?? null;
-        const delReq = store.delete(key);
-        delReq.onsuccess = () => this.#emitChange(key, oldValue, null);
-        delReq.onerror = (err) => Promise.reject(err.target.error || err);
-      };
-      return getReq;
-    }).then(() => true);
-  }
-
-  // 清空所有数据
-  clear() {
-    return this.#withStore("readwrite", (store) => store.clear()).then(() => {
-      this.#emitChange(null, null, null);
-      return true;
+  _mutateItem(key, actionFn, newValue) {
+    return this._withStore("readwrite", (store, resolve, reject) => {
+      handleReq(
+        store.get(key),
+        (result) => {
+          const oldValue = result ? result.value : null;
+          handleReq(
+            actionFn(store),
+            () => {
+              this._emitChange(key, oldValue, newValue);
+              resolve(true);
+            },
+            reject,
+          );
+        },
+        reject,
+      );
     });
   }
 
-  // 根据索引获取键名
-  async key(index) {
-    const e = await this.#withStore("readonly", (store) => {
+  setItem(key, value) {
+    return this._mutateItem(key, (store) => store.put({ key, value }), value);
+  }
+
+  getItem(key) {
+    return this._withStore("readonly", (store, resolve, reject) => {
+      handleReq(store.get(key), (result) => resolve(result ? result.value : null), reject);
+    });
+  }
+
+  removeItem(key) {
+    return this._mutateItem(key, (store) => store.delete(key), null);
+  }
+
+  clear() {
+    return this._withStore("readwrite", (store, resolve, reject) => {
+      handleReq(
+        store.clear(),
+        () => {
+          this._emitChange(null, null, null);
+          resolve(true);
+        },
+        reject,
+      );
+    });
+  }
+
+  key(index) {
+    return this._withStore("readonly", (store, resolve, reject) => {
       const req = store.openKeyCursor();
       let advanced = false;
-      req.onsuccess = (e) => {
-        const cur = e.target.result;
-        if (!cur || index === 0 || advanced) {
-          return;
-        }
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur) return resolve(undefined);
+        if (index === 0 || advanced) return resolve(cur.key);
+
         advanced = true;
         cur.advance(index);
       };
-      return req;
+      req.onerror = (e) => reject(e.target.error || e);
     });
-    return e.target.result?.key;
   }
 
-  // 获取数据项数量（异步属性）
   get length() {
     if (!lengthWarned) {
       console.warn(
@@ -160,80 +168,84 @@ export class EverCache {
       );
       lengthWarned = true;
     }
-    return this.#withStore("readonly", (store) => store.count()).then(
-      (e) => e.target.result,
-    );
+    return this._withStore("readonly", (store, resolve, reject) => {
+      handleReq(store.count(), resolve, reject);
+    });
   }
 
-  // 通用的迭代器实现，支持分批读取
-  async *#iterate(getValue) {
+  async *entries() {
     const db = await this[IDB];
-    const KeyRange = IDBKeyRange || globalThis.IDBKeyRange;
-    let lastKey,
-      hasMore = true;
+    let lastKey;
+    let hasMore = true;
+    const KeyRange =
+      typeof IDBKeyRange !== "undefined" ? IDBKeyRange : globalThis.IDBKeyRange;
 
     while (hasMore) {
-      const { items, hasMore: more } = await new Promise((resolve, reject) => {
+      const batch = await new Promise((resolve, reject) => {
+        const store = db
+          .transaction([STORE_NAME], "readonly")
+          .objectStore(STORE_NAME);
         const req =
           lastKey !== undefined
-            ? db
-                .transaction([STORE_NAME], "readonly")
-                .objectStore(STORE_NAME)
-                .openCursor(KeyRange.lowerBound(lastKey, true))
-            : db
-                .transaction([STORE_NAME], "readonly")
-                .objectStore(STORE_NAME)
-                .openCursor();
+            ? store.openCursor(KeyRange.lowerBound(lastKey, true))
+            : store.openCursor();
         const items = [];
 
-        req.onsuccess = (e) => {
-          const cursor = e.target.result;
-          if (cursor && items.length < 50) {
-            items.push([cursor.key, cursor.value]);
-            cursor.continue();
+        req.onsuccess = () => {
+          const cursor = req.result;
+          if (cursor) {
+            items.push([cursor.key, cursor.value.value]);
+            if (items.length < 50) {
+              cursor.continue();
+            } else {
+              resolve({ items, hasMore: true });
+            }
           } else {
-            resolve({ items, hasMore: !!cursor });
+            resolve({ items, hasMore: false });
           }
         };
         req.onerror = (e) => reject(e.target.error || e);
       });
 
-      for (const item of items) yield getValue(item);
-      hasMore = more;
-      if (hasMore) lastKey = items[items.length - 1][0];
+      for (const item of batch.items) {
+        yield item;
+      }
+      hasMore = batch.hasMore;
+      if (hasMore) {
+        lastKey = batch.items[batch.items.length - 1][0];
+      }
     }
   }
 
-  // 迭代所有键值对
-  async *entries() {
-    yield* this.#iterate((x) => x);
-  }
-  // 迭代所有键
   async *keys() {
-    yield* this.#iterate(([k]) => k);
+    for await (const [key] of this.entries()) {
+      yield key;
+    }
   }
-  // 迭代所有值
+
   async *values() {
-    yield* this.#iterate(([, v]) => v);
+    for await (const [, value] of this.entries()) {
+      yield value;
+    }
   }
 }
 
-// Proxy 处理器，支持属性式访问
 const handle = {
   get(target, key, receiver) {
-    return key in target || typeof key === "symbol" || key === "then"
-      ? Reflect.get(target, key, receiver)
-      : target.getItem(key);
+    if (key in target || typeof key === "symbol" || key === "then") {
+      return Reflect.get(target, key, receiver);
+    }
+
+    return target.getItem(key);
   },
   set(target, key, value) {
-    target.setItem(key, value).catch(() => {});
+    target.setItem(key, value).catch(() => { });
     return true;
   },
   deleteProperty(target, key) {
-    target.removeItem(key).catch(() => {});
+    target.removeItem(key).catch(() => { });
     return true;
   },
 };
 
-// 默认导出实例
 export const storage = new EverCache();
