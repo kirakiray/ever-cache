@@ -6,7 +6,7 @@ const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'));
 export default {
   input: 'src/main.js',
   output: {
-    file: 'dist/main.min.js',
+    file: 'src/main.min.js',
     format: 'es',
     sourcemap: true,
     banner: `/* ever-cache v${pkg.version} */`
