@@ -222,7 +222,7 @@ export class EverCache {
         req.onsuccess = (e) => {
           const cursor = e.target.result;
           if (cursor) {
-            items.push([cursor.key, cursor.value]);
+            items.push([cursor.key, cursor.value.value]);
             if (items.length < 50) {
               cursor.continue();
             } else {
