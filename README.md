@@ -25,6 +25,24 @@ const data = await storage.myKey;
 
 EverCache's code is concise and efficient, with a compressed file size of less than 2KB, providing a lightweight caching solution for your project.
 
+## Exports
+
+EverCache exports two items:
+
+- `EverCache` class: Create custom cache instances with unique storage names
+- `storage`: Default instance (`new EverCache("public")`)
+
+```javascript
+import { storage, EverCache } from "ever-cache";
+
+// Use the default instance
+await storage.setItem('key', 'value');
+
+// Or create a custom instance
+const myCache = new EverCache('my-app-cache');
+await myCache.setItem('key', 'value');
+```
+
 ## Installation
 
 EverCache can be installed through the npm package manager or directly introduced via the browser's native ESModule syntax.
@@ -55,12 +73,12 @@ import { storage } from "https://cdn.jsdelivr.net/gh/kirakiray/ever-cache/src/ma
 
 ### Store Data
 
-Use the `setItem` method to store data in the cache.
+Use the `setItem` method to store data in the cache. Returns `Promise<true>`.
 
 ```javascript
 async function saveData() {
   storage.myKey = { name: 'John', age: 30 };
-  // or 
+  // or
   await storage.setItem('myKey', { name: 'John', age: 30 });
 
   console.log('Data saved successfully!');
@@ -71,7 +89,7 @@ saveData();
 
 ### Retrieve Data
 
-Use the `getItem` method to get stored data based on the key name.
+Use the `getItem` method to get stored data based on the key name. Returns `Promise<any>`. Returns `null` if the key doesn't exist.
 
 ```javascript
 async function fetchData() {
@@ -87,7 +105,7 @@ fetchData();
 
 ### Delete Data
 
-Use the `removeItem` method to delete data with a specified key name.
+Use the `removeItem` method to delete data with a specified key name. Returns `Promise<true>`.
 
 ```javascript
 async function deleteData() {
@@ -103,7 +121,7 @@ deleteData();
 
 ### Clear All Data
 
-Use the `clear` method to clear all data in the cache.
+Use the `clear` method to clear all data in the cache. Returns `Promise<true>`.
 
 ```javascript
 async function clearData() {
@@ -117,7 +135,7 @@ clearData();
 
 ### Get Data Keys
 
-Use the `key` method to get all the keys in the cache.
+Use the `key` method to get the key name at a specific index. Returns `Promise<string | undefined>`.
 
 ```javascript
 async function firstKeys() {
@@ -130,7 +148,7 @@ firstKeys();
 
 ### Query Data Length
 
-Use the `length` property to get the number of key-value pairs stored in the cache.
+Use the `length` property to get the number of key-value pairs stored in the cache. Returns `Promise<number>`.
 
 ```javascript
 const count = await storage.length;
@@ -201,3 +219,79 @@ This event is triggered:
 - When using proxy syntax (`storage.key`), errors are silently caught. Use `setItem`/`getItem`/`removeItem` methods if you need error handling.
 - If you see an error about "open blocked", close other tabs that might be using an older version of the database.
 - The database connection automatically reconnects if it's closed externally.
+
+## Supported Data Types
+
+EverCache supports all data types that IndexedDB supports:
+
+- **Basic types**: String, Number, Boolean, null, undefined
+- **Date objects**: Date
+- **Binary data**: ArrayBuffer, Blob, File, FileList
+- **Collections**: Array, Object (can be nested)
+- **Advanced types**: Map, Set (limited browser support)
+
+**Note**: Functions, DOM nodes, Symbols, and other non-serializable objects cannot be stored directly.
+
+## Error Handling Best Practices
+
+When using proxy syntax (`storage.key`), errors are silently caught. For proper error handling, use method calls with try-catch:
+
+```javascript
+// Recommended: Use try-catch for error handling
+try {
+  await storage.setItem('key', value);
+  console.log('Data saved successfully');
+} catch (error) {
+  console.error('Failed to save data:', error);
+  // Handle the error appropriately
+}
+
+// Also applies to getItem
+try {
+  const data = await storage.getItem('key');
+  if (data === null) {
+    console.log('Key does not exist');
+  }
+} catch (error) {
+  console.error('Failed to retrieve data:', error);
+}
+```
+
+## Performance Tips
+
+- **Batch operations**: The `entries()` method reads data in batches of 50 items, making it suitable for iterating over large datasets
+- **Avoid frequent getItem calls**: When you need multiple items, consider using `entries()` to fetch all data at once instead of calling `getItem()` in a loop
+- **Each operation is a separate transaction**: Current version uses a separate transaction for each operation. For bulk writes, consider batching your writes
+
+```javascript
+// Good: Batch read for multiple items
+const allData = {};
+for await (let [key, value] of storage.entries()) {
+  allData[key] = value;
+}
+
+// Avoid: Multiple getItem calls in a loop
+for (let i = 0; i < 100; i++) {
+  const item = await storage.getItem(`item-${i}`); // Creates 100 separate transactions
+}
+```
+
+## Browser Compatibility
+
+| Feature | Chrome | Firefox | Edge | Safari |
+|---------|--------|---------|------|--------|
+| IndexedDB | 23+ | 10+ | 12+ | 10+ |
+| BroadcastChannel | 54+ | 38+ | 79+ | 15.4+ |
+
+**Notes**:
+- IE browser is not supported
+- If BroadcastChannel is not supported, cross-tab synchronization will be unavailable, but storage functionality will work normally
+- Safari 15.4+ is required for full BroadcastChannel support
+
+## Internal Implementation
+
+- **Database name**: `ever-cache-${id}` (where `id` is the storage identifier)
+- **ObjectStore name**: `main`
+- **Storage structure**: `{ key: string, value: any }`
+- **Auto-reconnection**: Database connection automatically reconnects if closed externally
+- **Batch iteration**: `entries()` uses `IDBKeyRange.lowerBound` for paginated cursor reading (50 items per batch)
