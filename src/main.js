@@ -1,16 +1,32 @@
-const SName = Symbol("storage-name");
-const IDB = Symbol("idb");
-const BC = Symbol("bc");
-const STORE_NAME = "main";
-let lengthWarned = false;
+// 私有属性符号
+const SName = Symbol("storage-name"); // 存储名称
+const IDB = Symbol("idb"); // IndexedDB 实例
+const BC = Symbol("bc"); // BroadcastChannel 实例
+const STORE_NAME = "main"; // IndexedDB object store 名称
+let lengthWarned = false; // length 属性警告标志
 
+/**
+ * 封装 IndexedDB 请求，返回 Promise 风格的接口
+ * @param {IDBRequest} req - IndexedDB 请求对象
+ * @param {Function} onSuccess - 成功回调
+ * @param {Function} onError - 失败回调
+ * @returns {IDBRequest} 原始请求对象
+ */
 const handleReq = (req, onSuccess, onError) => {
   req.onsuccess = () => onSuccess(req.result);
   req.onerror = (e) => onError(e.target.error || e);
   return req;
 };
 
+/**
+ * EverCache - 基于 IndexedDB 的异步存储类
+ * 提供类似 localStorage 的 API，但支持异步操作和跨标签页同步
+ */
 export class EverCache {
+  /**
+   * 创建一个 EverCache 实例
+   * @param {string} id - 存储标识符，用于区分不同的存储空间
+   */
   constructor(id = "public") {
     this[SName] = id;
     this[IDB] = this._openDB(id);
@@ -32,6 +48,13 @@ export class EverCache {
     return new Proxy(this, handle);
   }
 
+  /**
+   * 触发存储变更事件
+   * @param {string|null} key - 变更的键名
+   * @param {*} oldValue - 旧值
+   * @param {*} newValue - 新值
+   * @private
+   */
   _emitChange(key, oldValue, newValue) {
     const detail = { key, oldValue, newValue, cacheId: this[SName] };
     if (typeof window !== "undefined") {
@@ -40,6 +63,12 @@ export class EverCache {
     this[BC]?.postMessage(detail);
   }
 
+  /**
+   * 打开或创建 IndexedDB 数据库
+   * @param {string} id - 数据库标识符
+   * @returns {Promise<IDBDatabase>} 数据库实例
+   * @private
+   */
   _openDB(id) {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open(`ever-cache-${id}`);
@@ -88,6 +117,13 @@ export class EverCache {
     });
   }
 
+  /**
+   * 执行 object store 操作的辅助方法
+   * @param {string} mode - 事务模式：'readonly' 或 'readwrite'
+   * @param {Function} callback - 回调函数，接收 store、resolve、reject 参数
+   * @returns {Promise} 操作结果
+   * @private
+   */
   _withStore(mode, callback) {
     return this[IDB].then(
       (db) =>
@@ -98,6 +134,14 @@ export class EverCache {
     );
   }
 
+  /**
+   * 执行数据变更操作的通用方法
+   * @param {string} key - 键名
+   * @param {Function} actionFn - 执行操作的函数
+   * @param {*} newValue - 新值
+   * @returns {Promise<boolean>} 操作结果
+   * @private
+   */
   _mutateItem(key, actionFn, newValue) {
     return this._withStore("readwrite", (store, resolve, reject) => {
       handleReq(
@@ -118,20 +162,40 @@ export class EverCache {
     });
   }
 
+  /**
+   * 设置存储项
+   * @param {string} key - 键名
+   * @param {*} value - 值
+   * @returns {Promise<boolean>} 操作结果
+   */
   setItem(key, value) {
     return this._mutateItem(key, (store) => store.put({ key, value }), value);
   }
 
+  /**
+   * 获取存储项
+   * @param {string} key - 键名
+   * @returns {Promise<*>} 存储的值，不存在时返回 null
+   */
   getItem(key) {
     return this._withStore("readonly", (store, resolve, reject) => {
       handleReq(store.get(key), (result) => resolve(result ? result.value : null), reject);
     });
   }
 
+  /**
+   * 删除存储项
+   * @param {string} key - 键名
+   * @returns {Promise<boolean>} 操作结果
+   */
   removeItem(key) {
     return this._mutateItem(key, (store) => store.delete(key), null);
   }
 
+  /**
+   * 清空所有存储项
+   * @returns {Promise<boolean>} 操作结果
+   */
   clear() {
     return this._withStore("readwrite", (store, resolve, reject) => {
       handleReq(
@@ -145,6 +209,11 @@ export class EverCache {
     });
   }
 
+  /**
+   * 根据索引获取键名
+   * @param {number} index - 索引位置
+   * @returns {Promise<string|undefined>} 键名
+   */
   key(index) {
     return this._withStore("readonly", (store, resolve, reject) => {
       const req = store.openKeyCursor();
@@ -161,6 +230,11 @@ export class EverCache {
     });
   }
 
+  /**
+   * 获取存储项数量
+   * 注意：此属性返回 Promise，需要 await
+   * @returns {Promise<number>} 存储项数量
+   */
   get length() {
     if (!lengthWarned) {
       console.warn(
@@ -173,6 +247,10 @@ export class EverCache {
     });
   }
 
+  /**
+   * 异步迭代器：返回所有键值对
+   * @yields {[string, *]} 键值对数组
+   */
   async *entries() {
     const db = await this[IDB];
     let lastKey;
@@ -217,12 +295,20 @@ export class EverCache {
     }
   }
 
+  /**
+   * 异步迭代器：返回所有键名
+   * @yields {string} 键名
+   */
   async *keys() {
     for await (const [key] of this.entries()) {
       yield key;
     }
   }
 
+  /**
+   * 异步迭代器：返回所有值
+   * @yields {*} 值
+   */
   async *values() {
     for await (const [, value] of this.entries()) {
       yield value;
@@ -230,7 +316,16 @@ export class EverCache {
   }
 }
 
+/**
+ * Proxy 处理器
+ * 允许通过属性访问方式操作存储，如 cache.key = value
+ */
 const handle = {
+  /**
+   * 拦截属性读取
+   * 如果属性存在于实例上或是 symbol，则直接返回
+   * 否则调用 getItem 获取存储值
+   */
   get(target, key, receiver) {
     if (key in target || typeof key === "symbol" || key === "then") {
       return Reflect.get(target, key, receiver);
@@ -238,14 +333,26 @@ const handle = {
 
     return target.getItem(key);
   },
+  /**
+   * 拦截属性设置
+   * 调用 setItem 存储值
+   */
   set(target, key, value) {
     target.setItem(key, value).catch(() => { });
     return true;
   },
+  /**
+   * 拦截属性删除
+   * 调用 removeItem 删除存储项
+   */
   deleteProperty(target, key) {
     target.removeItem(key).catch(() => { });
     return true;
   },
 };
 
+/**
+ * 默认导出的 EverCache 实例
+ * 使用 "public" 作为存储标识符
+ */
 export const storage = new EverCache();
