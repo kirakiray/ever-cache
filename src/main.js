@@ -12,12 +12,12 @@ let lengthWarned = false; // length 属性警告标志
 export class EverCache {
   constructor(id = "public") {
     this[SName] = id;
-    this[IDB] = this._openDB(id);
+    this[IDB] = this.#openDB(id);
 
     // 初始化跨标签页广播通道
     if (typeof BroadcastChannel !== "undefined") {
       this[BC] = new BroadcastChannel(`ever-cache-${id}`);
-      this[BC].onmessage = (e) => this._dispatchEvent(e.data);
+      this[BC].onmessage = (e) => this.#dispatchEvent(e.data);
     }
 
     // 使用 Proxy 支持属性式访问
@@ -25,21 +25,21 @@ export class EverCache {
   }
 
   // 分发自定义存储事件
-  _dispatchEvent(detail) {
+  #dispatchEvent(detail) {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("ever-cache-storage", { detail }));
     }
   }
 
   // 触发数据变更事件（本地 + 跨标签页）
-  _emitChange(key, oldValue, newValue) {
+  #emitChange(key, oldValue, newValue) {
     const detail = { key, oldValue, newValue, cacheId: this[SName] };
-    this._dispatchEvent(detail);
+    this.#dispatchEvent(detail);
     this[BC]?.postMessage(detail);
   }
 
   // 打开或创建 IndexedDB 数据库
-  _openDB(id) {
+  #openDB(id) {
     return new Promise((resolve, reject) => {
       const req = indexedDB.open(`ever-cache-${id}`);
 
@@ -56,14 +56,14 @@ export class EverCache {
           upgradeReq.onupgradeneeded = (e) =>
             e.target.result.createObjectStore(STORE_NAME, { keyPath: "key" });
           upgradeReq.onsuccess = (e) => {
-            e.target.result.onclose = () => (this[IDB] = this._openDB(id));
+            e.target.result.onclose = () => (this[IDB] = this.#openDB(id));
             resolve(e.target.result);
           };
           upgradeReq.onerror = (e) => reject(e.target.error || e);
           return;
         }
         // 连接关闭后自动重连
-        db.onclose = () => (this[IDB] = this._openDB(id));
+        db.onclose = () => (this[IDB] = this.#openDB(id));
         resolve(db);
       };
 
@@ -78,7 +78,7 @@ export class EverCache {
   }
 
   // 通用的 object store 操作封装
-  _withStore(mode, operation) {
+  #withStore(mode, operation) {
     return this[IDB].then(
       (db) =>
         new Promise((resolve, reject) => {
@@ -93,12 +93,12 @@ export class EverCache {
 
   // 设置数据项
   setItem(key, value) {
-    return this._withStore("readwrite", (store) => {
+    return this.#withStore("readwrite", (store) => {
       const getReq = store.get(key);
       getReq.onsuccess = (e) => {
         const oldValue = e.target.result?.value ?? null;
         const putReq = store.put({ key, value });
-        putReq.onsuccess = () => this._emitChange(key, oldValue, value);
+        putReq.onsuccess = () => this.#emitChange(key, oldValue, value);
         putReq.onerror = (err) => Promise.reject(err.target.error || err);
       };
       return getReq;
@@ -107,19 +107,19 @@ export class EverCache {
 
   // 获取数据项
   getItem(key) {
-    return this._withStore("readonly", (store) => store.get(key)).then(
+    return this.#withStore("readonly", (store) => store.get(key)).then(
       (e) => e.target.result?.value ?? null,
     );
   }
 
   // 删除数据项
   removeItem(key) {
-    return this._withStore("readwrite", (store) => {
+    return this.#withStore("readwrite", (store) => {
       const getReq = store.get(key);
       getReq.onsuccess = (e) => {
         const oldValue = e.target.result?.value ?? null;
         const delReq = store.delete(key);
-        delReq.onsuccess = () => this._emitChange(key, oldValue, null);
+        delReq.onsuccess = () => this.#emitChange(key, oldValue, null);
         delReq.onerror = (err) => Promise.reject(err.target.error || err);
       };
       return getReq;
@@ -128,15 +128,15 @@ export class EverCache {
 
   // 清空所有数据
   clear() {
-    return this._withStore("readwrite", (store) => store.clear()).then(() => {
-      this._emitChange(null, null, null);
+    return this.#withStore("readwrite", (store) => store.clear()).then(() => {
+      this.#emitChange(null, null, null);
       return true;
     });
   }
 
   // 根据索引获取键名
   async key(index) {
-    const e = await this._withStore("readonly", (store) => {
+    const e = await this.#withStore("readonly", (store) => {
       const req = store.openKeyCursor();
       let advanced = false;
       req.onsuccess = (e) => {
@@ -160,13 +160,13 @@ export class EverCache {
       );
       lengthWarned = true;
     }
-    return this._withStore("readonly", (store) => store.count()).then(
+    return this.#withStore("readonly", (store) => store.count()).then(
       (e) => e.target.result,
     );
   }
 
   // 通用的迭代器实现，支持分批读取
-  async *_iterate(getValue) {
+  async *#iterate(getValue) {
     const db = await this[IDB];
     const KeyRange = IDBKeyRange || globalThis.IDBKeyRange;
     let lastKey,
@@ -206,15 +206,15 @@ export class EverCache {
 
   // 迭代所有键值对
   async *entries() {
-    yield* this._iterate((x) => x);
+    yield* this.#iterate((x) => x);
   }
   // 迭代所有键
   async *keys() {
-    yield* this._iterate(([k]) => k);
+    yield* this.#iterate(([k]) => k);
   }
   // 迭代所有值
   async *values() {
-    yield* this._iterate(([, v]) => v);
+    yield* this.#iterate(([, v]) => v);
   }
 }
 
